@@ -1,7 +1,7 @@
-fn encode(input: &str, alfabeto: &[u8]) -> String{ // Chamada de 'alfabeto' na forma binária.
+fn encode(input: &str, alfabeto: &[u8]) -> String {
     let bytes = input.as_bytes();
     let mut conversao = String::from("");
-    
+
     for chunk in bytes.chunks(3){
         //Dividindo em chunks de 3, para facilitar o uso dos 24 bits
         // println!("[DBG] Bytes em chunks de 3: {:?}", chunk);
@@ -45,7 +45,7 @@ fn encode(input: &str, alfabeto: &[u8]) -> String{ // Chamada de 'alfabeto' na f
 
         conversao.push(alfabeto[grupo1 as usize] as char);
         conversao.push(alfabeto[grupo2 as usize] as char);
-        
+
         if total_paddings == 2{
             conversao.push_str("==");
         } else if total_paddings == 1{
@@ -70,25 +70,34 @@ fn decode(encoded: &str, alfabeto: &[u8]) -> String{
     for char in encoded.chars(){
         if char != '='{
             let index = alfabeto.iter().position(|&x| x == char as u8).unwrap();
-            println!("adding: {}", index);
             list_of_indexes.push(index);
         } else {
             padding_count += 1;
-            println!("padding count: {}", padding_count);
         }
     }
 
-    for chunk in list_of_indexes.chunks(4){
-        let juncao: u32 = ((chunk[0] as u32) << 18)
-            | ((chunk[1] as u32) << 12)
-            | ((chunk[2] as u32) << 6)
-            | ((chunk[3] as u32) << 0);
-    
-        println!("Junção u32 da lista de indexes: {}", juncao);
-    }
-    
+    let mut conversao = String::new();
 
-    String::new() // Just for compilation
+    for chunk in list_of_indexes.chunks(4){
+        let i0 = chunk[0] as u32;
+        let i1 = chunk[1] as u32;
+        let i2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let i3 = if chunk.len() > 3 { chunk[3] as u32 } else { 0 };
+
+        //Reconstrução dos 24 bits a partir dos 4 grupos de 6 bits
+        let juncao: u32 = (i0 << 18) | (i1 << 12) | (i2 << 6) | (i3 << 0);
+
+        //Extração dos bytes originais — inverso do encode
+        let byte0 = (juncao >> 16) & 0xFF;
+        let byte1 = (juncao >> 8) & 0xFF;
+        let byte2 = (juncao >> 0) & 0xFF;
+
+        conversao.push(byte0 as u8 as char);
+        if chunk.len() > 2 { conversao.push(byte1 as u8 as char); }
+        if chunk.len() > 3 { conversao.push(byte2 as u8 as char); }
+    }
+
+    conversao
 }
 
 fn main(){
