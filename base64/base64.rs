@@ -64,7 +64,7 @@ fn decode(encoded: &str, alfabeto: &[u8]) -> String{
     /*
       "para cada caractere da entrada Base64, acha o índice dele no alfabeto".
     */
-    let mut padding_count = 0;
+    let mut _padding_count = 0;
     let mut list_of_indexes: Vec<usize> = Vec::new();
 
     for char in encoded.chars(){
@@ -72,7 +72,7 @@ fn decode(encoded: &str, alfabeto: &[u8]) -> String{
             let index = alfabeto.iter().position(|&x| x == char as u8).unwrap();
             list_of_indexes.push(index);
         } else {
-            padding_count += 1;
+            _padding_count += 1;
         }
     }
 
