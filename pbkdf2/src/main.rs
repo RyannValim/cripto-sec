@@ -1,38 +1,50 @@
-//Password-Based Key Derivation Function 2 - PBKDF2
+use sha2::Sha256;
+use hmac::{Hmac, Mac};
+use rand::RngCore;
 
-/*
-OBJETIVO:
- Criar um hash e atrasar propositalmente o processamento
- para frustrar ataques de força bruta ou dicionário.
+type HmacSha256 = Hmac<Sha256>;
 
-ARQUITETURA:
- Entradas necessárias:
- -Password: o texto original inserido pelo usuário.
- -Salt: valor aleatório único gerado para aquele
-  usuário (evita Rainbow Tables).
- -Iterações (c): número de vezes que o motor de hash
-  será rodada (ex: 100.000 a 600.000)
- -Tamanho (dkLen): quantos bytes a chave final deve ter.
- -Motor de hash (PRF): a função pseudoaleatória base (HMAC-SHA256)
+fn hmac_sha256(senha: &[u8], mensagem: &[u8], salt: &[u8], c: u32) -> Vec<u8>{
+  /*1. A derivação da chave ocorre em blocos:
+      𝐷𝐾 = 𝑇1 ∣∣ 𝑇2 ∣∣. . . ∣∣ 𝑇𝑛
 
- Fluxo de processamento:
- 1. Priemira passada (U1): o HMAC é acionado usando Password como chave.
-  A mensagem processada é o Salt concatenado com um número de bloco
-  (iniciando em 1). A saída é um bloco de 32 bytes (capacidade do SHA256).
- 2. O Loop de Iterações (U2 até Uc): a saída exata do passo anterior (u1)
-  entra novamente no HMAC como mensagem, sempre utilizando Password como
-  chave. Isso se repete em cadeia pelo número exato de iterações (c).
- 3. A Combinação (XOR): todos os resultados intermediários gerados
-  (U1, U2, ..., Uc) são misturados bit a bit usando a operação lógica
-  matemática XOR (^). O resultado único deste imenso XOR é o "Bloco 1"
-  válido.
- 4. Extensão (Concatenação): o SHA256 gera blocos de 32 bytes. Se você
-  pedir uma chave final (dkLen) de 64 bytes, o algoritmo repete os passos
-  1 a 3 inteiros, mas agora alterando o número do bloco inicial para 2
-  (Salt + 2). No fim, ele junta (concatena) o Bloco 1 com o Bloco 2 para
-  entregar os 64 bytes.
-*/
-
-fn main() {
+    2. Cada bloco 𝑇𝑖 é calculado assim:
+      𝑇𝑖 = 𝑈1 ⊕ 𝑈2 ⊕. . .⊕ 𝑈𝑐
     
+    3. Onde cada 𝑈 é calculado assim:
+      𝑈1 = 𝐻(𝑃' 𝑆 ∣∣ 𝑖)
+      𝑈2 = 𝐻(𝑃' 𝑈1)
+      𝑈3 = 𝐻(𝑃' 𝑈2)
+      𝑈𝑐 = 𝐻(𝑃' 𝑈𝑐−1)
+
+      P = password
+      s = salt
+      i = block number
+      h = função hash
+  */
+
+  // então eu preciso fazer no meu 𝑈1: mensagem = salt + numero_do_bloco  
+  // agora preciso criar uma instância do hmac com a chave, passar a mensagem, finalizar e retornar os bytes
+  let mut mac = HmacSha256::new_from_slice(senha)?; // ? = operador de propagação de erro (retorna o erro)
+  let i: u32 = 1; // inicializa a variável de contagem de número do bloco.
+
+  // montagem do vec<u8> para retorno -> S || i
+  // aqui será concatenado (sem cálculos) os valores do salt e do número do bloco
+  let mut mensagem = Vec::new();
+  mensagem.extend_from_slice(salt);               // extend_from_slice() empurra os bytes de uma slice pro final do Vec
+  mensagem.extend_from_slice(&i.to_be_bytes());   // to_be_bytes() converte u32 em 4 bytes na ordem "big-endian"
+
+  // update e finalize
+  for i in 0..=c{
+    
+  }
+
+  return mensagem  
+}
+
+fn main(){
+  let mut salt = [0u8; 16]; // 16 bytes = 128 bits
+  rand::rngs::OsRng.fill_bytes(&mut salt); // preenche os 16 bytes com números aleatórios gerados pelo sistema
+
+  hmac_sha256("curitiba", salt)
 }
