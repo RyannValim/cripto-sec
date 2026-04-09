@@ -1,8 +1,0 @@
-[package]
-name = "aes_pbkdf2"
-version = "0.1.0"
-edition = "2021"
-
-# Nenhuma dependência externa — tudo implementado do zero para fins de estudo.
-# Em produção, use crates auditadas como `aes`, `pbkdf2` e `hmac` do RustCrypto.
-[dependencies]
