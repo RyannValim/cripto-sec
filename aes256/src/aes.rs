@@ -1,5 +1,3 @@
-use crate::pbkdf2::pbkdf2;
-
 /* key_expansion(): O AES não usa a chave diretamente em cada round, ele deriva
  várias subchaves a partir da chave original. Para AES-128 são 11 subchaves,
  cada uma de 16 bytes. Essa função pega sua chave e gera todas elas. 
@@ -68,8 +66,8 @@ fn xor_words(a: & [u8; 4], b: & [u8; 4]) -> [u8; 4]{
 
     result
 }
-
-pub fn key_expansion(key: &[u8]) -> [[u8; 16]; 11]{ // <- significa [[16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens]]
+ // <- significa [[16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens]]
+pub fn key_expansion(key: &[u8]) -> [[u8; 16]; 11]{
     let mut matriz_saida = [[0u8; 16]; 11];
     
     matriz_saida[0].copy_from_slice(key);
@@ -77,12 +75,12 @@ pub fn key_expansion(key: &[u8]) -> [[u8; 16]; 11]{ // <- significa [[16 itens],
     for i in 1..11{
         let anterior = matriz_saida[i - 1];
 
-        let w0_anterior = &anterior[0..4];
-        let w1_anterior = &anterior[4..8];
-        let w2_anterior = &anterior[8..12];
-        let w3_anterior = &anterior[12..16];
+        let w0_anterior: &[u8; 4] = anterior[0..4].try_into().unwrap();
+        let w1_anterior: &[u8; 4] = anterior[4..8].try_into().unwrap();
+        let w2_anterior: &[u8; 4] = anterior[8..12].try_into().unwrap();
+        let w3_anterior: &[u8; 4] = anterior[12..16].try_into().unwrap();
 
-        let w0_novo = xor_words(w0_anterior, &schedule_core(w3_anterior.try_into().unwrap(), i));
+        let w0_novo = xor_words(w0_anterior, &schedule_core(*w3_anterior, i));
         let w1_novo = xor_words(w1_anterior, &w0_novo);
         let w2_novo = xor_words(w2_anterior, &w1_novo);
         let w3_novo = xor_words(w3_anterior, &w2_novo);
@@ -212,29 +210,65 @@ pub fn mix_columns(state: [[u8; 4]; 4]) -> [[u8; 4]; 4]{
 }
 
 pub fn aes(plaintext: &[u8], dk: &[u8]) -> Vec<u8>{
-    let mut ciphertext: Vec<u8> = Vec::new();
-
     /* 1° etapa:
         key_expansion()         - gera as subchaves
         bytes_to_state()        - organiza o plaintext na matriz 4x4
         add_round_key()         - feito no round 0 (antes de qualquer round)
-    */      
-
-    /* 2° etapa:
-        loop rounds 1..(limite-1):
-        sub_bytes()
-        shift_rows()
-        mix_columns()
-        add_round_key()     - dentro do loop
-    */ 
-
-
-    /*3° etapa:
-        round final (limite):
-        sub_bytes()
-        shift_rows()
-        add_round_key()     - sem mix_columns
     */
+    // 1° etapa: preparação
+    let subchaves = key_expansion(dk);
+    let mut ciphertext: Vec<u8> = Vec::new();
+
+    // processa cada bloco de 16 bytes
+    for bloco in plaintext.chunks(16) {
+        let mut state = bytes_to_state(bloco.try_into().unwrap());
+        state = add_round_key(state, &subchaves[0]);
+
+        for round in 1..10 {
+            state = sub_bytes(state);
+            state = shift_rows(state);
+            state = mix_columns(state);
+            state = add_round_key(state, &subchaves[round]);
+        }
+
+        state = sub_bytes(state);
+        state = shift_rows(state);
+        state = add_round_key(state, &subchaves[10]);
+
+        for lin in 0..4 {
+            for col in 0..4 {
+                ciphertext.push(state[col][lin]);
+            }
+        }
+    }
 
     ciphertext
 }
+
+/*
+> key_expansion(key) — recebe a chave derivada, quebra em 11 subchaves de 16 bytes cada usando rotate,
+ substituição pela S-Box e XOR com Rcon, e devolve uma matriz [[u8; 16]; 11] com todas as subchaves.
+
+> bytes_to_state(plaintext) — recebe 16 bytes do plaintext e os organiza numa matriz 4x4 em ordem
+ column-major, devolvendo o [[u8; 4]; 4] chamado de state.
+
+> add_round_key(state, subkey) — recebe o state atual e uma subchave de 16 bytes, faz XOR byte a byte
+ entre os dois, e devolve o state modificado. É a única etapa que mistura a chave com os dados.
+
+> sub_bytes(state) — recebe o state e substitui cada byte pelo valor correspondente na S-Box, devolvendo 
+ o state com os bytes embaralhados de forma não-linear.
+
+> shift_rows(state) — recebe o state e rotaciona cada linha ciclicamente para a esquerda pelo número da
+ linha (linha 0 não move, linha 1 move 1, etc.), devolvendo o state reorganizado.
+
+> gf_mul2 / gf_mul3 — funções auxiliares do mix_columns que multiplicam um byte por 2 ou 3 em campo finito
+ GF(2⁸) usando shift de bits e XOR com o polinômio 0x1b.
+ 
+> mix_columns(state) — recebe o state e mistura cada coluna aplicando a matriz de mistura do AES via
+ multiplicações em GF(2⁸), devolvendo o state com a difusão aplicada.
+
+> aes(plaintext, dk) — recebe o plaintext e a chave derivada, executa o key_expansion, organiza o state com
+ bytes_to_state, aplica add_round_key no round 0, depois em loop aplica sub_bytes → shift_rows → mix_columns
+ → add_round_key por 9 rounds, e finaliza com sub_bytes → shift_rows → add_round_key sem o mix_columns,
+ devolvendo o ciphertext como Vec<u8>.
+*/

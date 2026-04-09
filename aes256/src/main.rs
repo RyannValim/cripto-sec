@@ -11,16 +11,20 @@ use rand::RngCore;
 fn main(){
     let password = b"Curitib@231";
     let c: u32 = 100_000;
-    let dklen: u32 = 32;
+    let dklen: u32 = 16;
 
     let mut salt = [0u8; 16];
     OsRng.fill_bytes(&mut salt);
 
     let dk = pbkdf2(password, &salt, c, dklen);
-    println!("\nDerived Key with PBKDF2:\n{:?}", dk);
 
     let plaintext = b"iryanngustavo@gmail.com";
 
-    let ciphertext: Vec<u8> = aes(plaintext, &dk);
-    println!("\nPlaintext: {:?}\nDerived key: {:?}\nCiphered text: {:?}", plaintext, dk, ciphertext);
+    let block_size = 16;
+    let pad_len = block_size - (plaintext.len() % block_size);
+    let mut padded = plaintext.to_vec();
+    padded.extend(vec![pad_len as u8; pad_len]);
+
+    let ciphertext: Vec<u8> = aes(&padded, &dk);
+    println!("\nTexto de entrada:\n{:?}\n\nChave derivada com PBKDF2:\n{:?}\n\nTexto encriptado:\n{:?}", plaintext, dk, ciphertext);
 }
