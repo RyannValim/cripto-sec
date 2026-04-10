@@ -8,6 +8,19 @@ use crate::aes::aes;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
+fn pkcs7_pad(plaintext: &[u8]) -> Vec<u8>{
+    let block_size = 16;
+    let pad_len = block_size - (plaintext.len() % block_size);
+    let mut padded = plaintext.to_vec();
+    padded.extend(vec![pad_len as u8; pad_len]);
+    padded
+}
+
+fn pkcs7_unpad(padded: &[u8]) -> Vec<u8>{
+    let pad_len = *padded.last().unwrap() as usize;
+    padded[..padded.len() - pad_len].to_vec()
+}
+
 fn main(){
     let password = b"Curitib@231";
     let c: u32 = 100_000;
@@ -19,12 +32,8 @@ fn main(){
     let dk = pbkdf2(password, &salt, c, dklen);
 
     let plaintext = b"iryanngustavo@gmail.com";
+    let padded_plaintext = pkcs7_pad(plaintext);
 
-    let block_size = 16;
-    let pad_len = block_size - (plaintext.len() % block_size);
-    let mut padded = plaintext.to_vec();
-    padded.extend(vec![pad_len as u8; pad_len]);
-
-    let ciphertext: Vec<u8> = aes(&padded, &dk);
+    let ciphertext: Vec<u8> = aes(&padded_plaintext, &dk);
     println!("\nTexto de entrada:\n{:?}\n\nChave derivada com PBKDF2:\n{:?}\n\nTexto encriptado:\n{:?}", plaintext, dk, ciphertext);
 }
