@@ -34,6 +34,9 @@ fn main(){
     let plaintext = b"iryanngustavo@gmail.com";
     let padded_plaintext = pkcs7_pad(plaintext);
 
-    let ciphertext: Vec<u8> = aes(&padded_plaintext, &dk);
-    println!("\nTexto de entrada:\n{:?}\n\nChave derivada com PBKDF2:\n{:?}\n\nTexto encriptado:\n{:?}", plaintext, dk, ciphertext);
+    let ciphertext: Vec<u8> = aes(&padded_plaintext, &dk, dklen);
+    println!("\nTexto de entrada:\n{:?}\n\n
+        Chave derivada com PBKDF2:\n{:?}\n\n
+        Texto encriptado:\n{:?}",
+        plaintext, dk, ciphertext);
 }

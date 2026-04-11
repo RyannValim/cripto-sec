@@ -1,0 +1,25 @@
+> key_expansion(key) — recebe a chave derivada, quebra em 11 subchaves de 16 bytes cada usando rotate,
+ substituição pela S-Box e XOR com Rcon, e devolve uma matriz [[u8; 16]; 11] com todas as subchaves.
+
+> bytes_to_state(plaintext) — recebe 16 bytes do plaintext e os organiza numa matriz 4x4 em ordem
+ column-major, devolvendo o [[u8; 4]; 4] chamado de state.
+
+> add_round_key(state, subkey) — recebe o state atual e uma subchave de 16 bytes, faz XOR byte a byte
+ entre os dois, e devolve o state modificado. É a única etapa que mistura a chave com os dados.
+
+> sub_bytes(state) — recebe o state e substitui cada byte pelo valor correspondente na S-Box, devolvendo 
+ o state com os bytes embaralhados de forma não-linear.
+
+> shift_rows(state) — recebe o state e rotaciona cada linha ciclicamente para a esquerda pelo número da
+ linha (linha 0 não move, linha 1 move 1, etc.), devolvendo o state reorganizado.
+
+> gf_mul2 / gf_mul3 — funções auxiliares do mix_columns que multiplicam um byte por 2 ou 3 em campo finito
+ GF(2⁸) usando shift de bits e XOR com o polinômio 0x1b.
+ 
+> mix_columns(state) — recebe o state e mistura cada coluna aplicando a matriz de mistura do AES via
+ multiplicações em GF(2⁸), devolvendo o state com a difusão aplicada.
+
+> aes(plaintext, dk) — recebe o plaintext e a chave derivada, executa o key_expansion, organiza o state com
+ bytes_to_state, aplica add_round_key no round 0, depois em loop aplica sub_bytes → shift_rows → mix_columns
+ → add_round_key por 9 rounds, e finaliza com sub_bytes → shift_rows → add_round_key sem o mix_columns,
+ devolvendo o ciphertext como Vec<u8>.
