@@ -68,33 +68,47 @@ fn xor_words(a: & [u8; 4], b: & [u8; 4]) -> [u8; 4]{
 
     result
 }
- // <- significa [[16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens], [16 itens]]
-pub fn key_expansion(key: &[u8], dklen: u32) -> Vec<[u8; 16]>{
-    let num_subchaves = ((dklen / 4) + 6 + 1) as usize;
-    let mut matriz_saida: Vec<[u8; 16]> = vec![[0u8; 16]; num_subchaves];
 
-    matriz_saida[0].copy_from_slice(key);
+pub fn key_expansion(key: &[u8], dklen: u32) -> Vec<[u8; 16]> {
+    let nk = (dklen / 4) as usize;                           // número de palavras da chave (4, 6 ou 8)
+    let num_rounds = (dklen / 4) + 6;                        // número de rounds
+    let total_palavras = ((num_rounds + 1) * 4) as usize;    // total de palavras necessárias
 
-    for i in 1..num_subchaves{
-        let anterior = matriz_saida[i - 1];
+    // 1. Divide a chave inicial em palavras de 4 bytes
+    let mut palavras: Vec<[u8; 4]> = key.chunks(4)
+        .map(|c| c.try_into().unwrap())
+        .collect();
+    
+    // 2. Deriva as palavras restantes
+    for i in nk..total_palavras {
+        let w_anterior = palavras[i - 1];
 
-        let w0_anterior: &[u8; 4] = anterior[0..4].try_into().unwrap();
-        let w1_anterior: &[u8; 4] = anterior[4..8].try_into().unwrap();
-        let w2_anterior: &[u8; 4] = anterior[8..12].try_into().unwrap();
-        let w3_anterior: &[u8; 4] = anterior[12..16].try_into().unwrap();
+        let nova_palavra = if i % nk == 0 {
+            // a cada Nk palavras, aplica schedule_core
+            xor_words(&palavras[i - nk], &schedule_core(w_anterior, i / nk))
+        } else if nk == 8 && i % nk == 4 {
+            // caso especial do AES-256: aplica sub_word
+            xor_words(&palavras[i - nk], &sub_word(w_anterior))
+        } else {
+            // senão, XOR simples
+            xor_words(&palavras[i - nk], &w_anterior)
+        };
 
-        let w0_novo = xor_words(w0_anterior, &schedule_core(*w3_anterior, i));
-        let w1_novo = xor_words(w1_anterior, &w0_novo);
-        let w2_novo = xor_words(w2_anterior, &w1_novo);
-        let w3_novo = xor_words(w3_anterior, &w2_novo);
-
-        matriz_saida[i][0..4].copy_from_slice(&w0_novo);
-        matriz_saida[i][4..8].copy_from_slice(&w1_novo);
-        matriz_saida[i][8..12].copy_from_slice(&w2_novo);
-        matriz_saida[i][12..16].copy_from_slice(&w3_novo);
+        palavras.push(nova_palavra);
     }
 
-    matriz_saida
+    // 3. Agrupa as palavras de 4 em 4 em blocos de 16 bytes
+    let mut subchaves: Vec<[u8; 16]> = Vec::new();
+    for bloco in palavras.chunks(4) {
+        let mut subchave = [0u8; 16];
+        subchave[0..4].copy_from_slice(&bloco[0]);
+        subchave[4..8].copy_from_slice(&bloco[1]);
+        subchave[8..12].copy_from_slice(&bloco[2]);
+        subchave[12..16].copy_from_slice(&bloco[3]);
+        subchaves.push(subchave);
+    }
+
+    subchaves
 }
 
 /* bytes_to_state(): O AES não opera em bytes lineares — ele organiza os dados
