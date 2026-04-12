@@ -3,23 +3,10 @@ mod pbkdf2;
 mod aes;
 
 use crate::pbkdf2::pbkdf2;
-use crate::aes::aes;
+use crate::aes::{aes_encrypt, aes_decrypt};
 
 use rand::rngs::OsRng;
 use rand::RngCore;
-
-fn pkcs7_pad(plaintext: &[u8]) -> Vec<u8>{
-    let block_size = 16;
-    let pad_len = block_size - (plaintext.len() % block_size);
-    let mut padded = plaintext.to_vec();
-    padded.extend(vec![pad_len as u8; pad_len]);
-    padded
-}
-
-fn pkcs7_unpad(padded: &[u8]) -> Vec<u8>{
-    let pad_len = *padded.last().unwrap() as usize;
-    padded[..padded.len() - pad_len].to_vec()
-}
 
 fn main(){
     let password = b"Curitib@231";
@@ -31,10 +18,15 @@ fn main(){
 
     let dk = pbkdf2(password, &salt, c, dklen);
 
-    let plaintext = b"iryanngustavo@gmail.com";
-    let padded_plaintext = pkcs7_pad(plaintext);
+    let plaintext = b"email@teste.com";
+    let ciphertext = aes_encrypt(plaintext, &dk, dklen);
+    let decrypted = aes_decrypt(&ciphertext, &dk, dklen);
 
-    let ciphertext: Vec<u8> = aes(&padded_plaintext, &dk, dklen);
-    println!("\nTexto de entrada:\n{:?}\n\nChave derivada com PBKDF2:\n{:?}\n\nTexto encriptado:\n{:?}",
-    plaintext, dk, ciphertext);
+    let hex: String = ciphertext.iter().map(|b| format!("{:02x}", b)).collect();
+
+    println!("Chave secreta:\n{}", std::str::from_utf8(password).unwrap());
+    println!("\nChave derivada com PBKDF2:\n{:?}", dk);
+    println!("\nTexto de entrada:\n{}", std::str::from_utf8(plaintext).unwrap());
+    println!("\nTexto encriptografado (hex):\n{}", hex);
+    println!("\nTexto desencriptografado:\n{}", String::from_utf8(decrypted).unwrap());
 }

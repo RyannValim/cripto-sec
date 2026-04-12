@@ -1,8 +1,3 @@
-/* key_expansion(): O AES não usa a chave diretamente em cada round, ele deriva
- várias subchaves a partir da chave original. Para AES-128 são 11 subchaves,
- cada uma de 16 bytes. Essa função pega sua chave e gera todas elas. 
-*/
-// S-BOX do AES: tabela de substituição fixa de 256 valores
 const SBOX: [u8; 256] = [
     0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
     0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
@@ -22,12 +17,29 @@ const SBOX: [u8; 256] = [
     0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16,
 ];
 
-// constantes de round: valor diferente para cada round para garantir unicidade das subchaves
+const INV_SBOX: [u8; 256] = [
+    0x52,0x09,0x6a,0xd5,0x30,0x36,0xa5,0x38,0xbf,0x40,0xa3,0x9e,0x81,0xf3,0xd7,0xfb,
+    0x7c,0xe3,0x39,0x82,0x9b,0x2f,0xff,0x87,0x34,0x8e,0x43,0x44,0xc4,0xde,0xe9,0xcb,
+    0x54,0x7b,0x94,0x32,0xa6,0xc2,0x23,0x3d,0xee,0x4c,0x95,0x0b,0x42,0xfa,0xc3,0x4e,
+    0x08,0x2e,0xa1,0x66,0x28,0xd9,0x24,0xb2,0x76,0x5b,0xa2,0x49,0x6d,0x8b,0xd1,0x25,
+    0x72,0xf8,0xf6,0x64,0x86,0x68,0x98,0x16,0xd4,0xa4,0x5c,0xcc,0x5d,0x65,0xb6,0x92,
+    0x6c,0x70,0x48,0x50,0xfd,0xed,0xb9,0xda,0x5e,0x15,0x46,0x57,0xa7,0x8d,0x9d,0x84,
+    0x90,0xd8,0xab,0x00,0x8c,0xbc,0xd3,0x0a,0xf7,0xe4,0x58,0x05,0xb8,0xb3,0x45,0x06,
+    0xd0,0x2c,0x1e,0x8f,0xca,0x3f,0x0f,0x02,0xc1,0xaf,0xbd,0x03,0x01,0x13,0x8a,0x6b,
+    0x3a,0x91,0x11,0x41,0x4f,0x67,0xdc,0xea,0x97,0xf2,0xcf,0xce,0xf0,0xb4,0xe6,0x73,
+    0x96,0xac,0x74,0x22,0xe7,0xad,0x35,0x85,0xe2,0xf9,0x37,0xe8,0x1c,0x75,0xdf,0x6e,
+    0x47,0xf1,0x1a,0x71,0x1d,0x29,0xc5,0x89,0x6f,0xb7,0x62,0x0e,0xaa,0x18,0xbe,0x1b,
+    0xfc,0x56,0x3e,0x4b,0xc6,0xd2,0x79,0x20,0x9a,0xdb,0xc0,0xfe,0x78,0xcd,0x5a,0xf4,
+    0x1f,0xdd,0xa8,0x33,0x88,0x07,0xc7,0x31,0xb1,0x12,0x10,0x59,0x27,0x80,0xec,0x5f,
+    0x60,0x51,0x7f,0xa9,0x19,0xb5,0x4a,0x0d,0x2d,0xe5,0x7a,0x9f,0x93,0xc9,0x9c,0xef,
+    0xa0,0xe0,0x3b,0x4d,0xae,0x2a,0xf5,0xb0,0xc8,0xeb,0xbb,0x3c,0x83,0x53,0x99,0x61,
+    0x17,0x2b,0x04,0x7e,0xba,0x77,0xd6,0x26,0xe1,0x69,0x14,0x63,0x55,0x21,0x0c,0x7d,
+];
+
 const RCON: [u8; 15] = [
     0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d
 ];
 
-// substitui cada palavra usando a SBOX
 fn sub_word(w: [u8; 4]) -> [u8; 4]{
     let mut result: [u8; 4] = [0u8; 4];
 
@@ -39,7 +51,6 @@ fn sub_word(w: [u8; 4]) -> [u8; 4]{
     result
 }
 
-// rotaciona os 4 bytes ciclicamente: [a, b, c, d] -> [b, c, d, a]
 fn rotate_word(w: [u8; 4]) -> [u8; 4]{
     let mut result: [u8; 4] = [0u8; 4];
     result[0] = w[1];
@@ -50,15 +61,13 @@ fn rotate_word(w: [u8; 4]) -> [u8; 4]{
     result
 }
 
-// aplica (rotate + sub + XOR com RCON): transforma w3 para derivar w0 novo.
-fn schedule_core(w: [u8; 4], i: usize) -> [u8; 4]{ // recebe i (numero do round) para saber qual RCON utilizar
+fn schedule_core(w: [u8; 4], i: usize) -> [u8; 4]{
     let mut result: [u8; 4] = sub_word(rotate_word(w));
     result[0] ^= RCON[i];
     
     result
 }
 
-// faz XOR byte a byte entre duas palavras de 4 bytes
 fn xor_words(a: & [u8; 4], b: & [u8; 4]) -> [u8; 4]{
     let mut result: [u8; 4] = [0u8; 4];
     result[0] = a[0] ^ b[0];
@@ -70,34 +79,28 @@ fn xor_words(a: & [u8; 4], b: & [u8; 4]) -> [u8; 4]{
 }
 
 pub fn key_expansion(key: &[u8], dklen: u32) -> Vec<[u8; 16]> {
-    let nk = (dklen / 4) as usize;                           // número de palavras da chave (4, 6 ou 8)
-    let num_rounds = (dklen / 4) + 6;                        // número de rounds
-    let total_palavras = ((num_rounds + 1) * 4) as usize;    // total de palavras necessárias
+    let nk = (dklen / 4) as usize;
+    let num_rounds = (dklen / 4) + 6;
+    let total_palavras = ((num_rounds + 1) * 4) as usize;
 
-    // 1. Divide a chave inicial em palavras de 4 bytes
     let mut palavras: Vec<[u8; 4]> = key.chunks(4)
         .map(|c| c.try_into().unwrap())
         .collect();
     
-    // 2. Deriva as palavras restantes
     for i in nk..total_palavras {
         let w_anterior = palavras[i - 1];
 
         let nova_palavra = if i % nk == 0 {
-            // a cada Nk palavras, aplica schedule_core
             xor_words(&palavras[i - nk], &schedule_core(w_anterior, i / nk))
         } else if nk == 8 && i % nk == 4 {
-            // caso especial do AES-256: aplica sub_word
             xor_words(&palavras[i - nk], &sub_word(w_anterior))
         } else {
-            // senão, XOR simples
             xor_words(&palavras[i - nk], &w_anterior)
         };
 
         palavras.push(nova_palavra);
     }
 
-    // 3. Agrupa as palavras de 4 em 4 em blocos de 16 bytes
     let mut subchaves: Vec<[u8; 16]> = Vec::new();
     for bloco in palavras.chunks(4) {
         let mut subchave = [0u8; 16];
@@ -111,15 +114,10 @@ pub fn key_expansion(key: &[u8], dklen: u32) -> Vec<[u8; 16]> {
     subchaves
 }
 
-/* bytes_to_state(): O AES não opera em bytes lineares — ele organiza os dados
- numa matriz 4x4 de bytes, chamada de state. Essa função pega seus 16 bytes de
- plaintext e os organiza nessa grade.
-*/
 pub fn bytes_to_state(plaintext: [u8; 16]) -> [[u8; 4]; 4]{
     let mut state: [[u8; 4]; 4] = [[0u8; 4]; 4];
     let mut i_ptxt = 0;
 
-    // preenchendo a matriz "State" via Column-Major
     for lin in 0..4{
         for col in 0..4{
             state[col][lin] = plaintext[i_ptxt];
@@ -130,9 +128,6 @@ pub fn bytes_to_state(plaintext: [u8; 16]) -> [[u8; 4]; 4]{
     state
 }
 
-/* add_round_key(): Faz XOR byte a byte entre o state atual e a subchave do
- round atual. É a única etapa que mistura a chave com os dados.
-*/
 pub fn add_round_key(state: [[u8; 4]; 4], subkey: &[u8; 16]) -> [[u8; 4]; 4]{
     let mut state = state;
     let mut i_sb = 0;
@@ -146,10 +141,6 @@ pub fn add_round_key(state: [[u8; 4]; 4], subkey: &[u8; 16]) -> [[u8; 4]; 4]{
     state
 }
 
-/*sub_bytes(): Substitui cada byte do state por um valor correspondente numa
- tabela fixa chamada S-Box. É uma operação de confusão — embaralha os valores
- de forma não-linear.
-*/
 pub fn sub_bytes(state: [[u8; 4]; 4]) -> [[u8; 4]; 4]{
     let mut state = state;
     
@@ -162,9 +153,18 @@ pub fn sub_bytes(state: [[u8; 4]; 4]) -> [[u8; 4]; 4]{
     state
 }
 
-/* shift_rows(): Desloca as linhas da matriz state ciclicamente para a esquerda.
- A linha 0 não move, linha 1 desloca 1, linha 2 desloca 2, linha 3 desloca 3.
-*/
+pub fn inv_sub_bytes(state: [[u8; 4]; 4]) -> [[u8; 4]; 4]{
+    let mut state = state;
+    
+    for lin in 0..4{
+        for col in 0..4{
+            state[col][lin] = INV_SBOX[state[col][lin] as usize];
+        }
+    }
+
+    state
+}
+
 pub fn shift_rows(state: [[u8; 4]; 4]) -> [[u8; 4]; 4] {
     let mut state = state;
 
@@ -187,28 +187,59 @@ pub fn shift_rows(state: [[u8; 4]; 4]) -> [[u8; 4]; 4] {
     state
 }
 
-/* mix_columns(): Opera em cada coluna da matriz, misturando os 4 bytes dela usando
- multiplicação em campo finito (GF(2⁸)). É a etapa de difusão — espalha a influência
- de cada byte por toda a coluna.
-*/
-// Multiplica por 2 em GF(2⁸)
+pub fn inv_shift_rows(state: [[u8; 4]; 4]) -> [[u8; 4]; 4] {
+    let mut state = state;
+
+    for lin in 0..4 {
+        let mut temp_array: [u8; 4] = [
+            state[0][lin],
+            state[1][lin],
+            state[2][lin],
+            state[3][lin],
+        ];
+
+        temp_array.rotate_right(lin);
+
+        state[0][lin] = temp_array[0];
+        state[1][lin] = temp_array[1];
+        state[2][lin] = temp_array[2];
+        state[3][lin] = temp_array[3];
+    }
+
+    state
+}
+
 fn gf_mul2(x: u8) -> u8 {
-    if x & 0x80 != 0 {    // verifica se o bit 7 é 1
-        (x << 1) ^ 0x1b   // desloca e reduz com o polinômio do AES
+    if x & 0x80 != 0 {
+        (x << 1) ^ 0x1b
     } else {
-        x << 1             // só desloca
+        x << 1
     }
 }
 
-// Multiplica por 3 em GF(2⁸) — 3 = 2 + 1, então é gf_mul2 XOR com o próprio valor
 fn gf_mul3(x: u8) -> u8 {
     gf_mul2(x) ^ x
+}
+
+fn gf_mul9(x: u8) -> u8 {
+    gf_mul2(gf_mul2(gf_mul2(x))) ^ x
+}
+
+fn gf_mul11(x: u8) -> u8 {
+    gf_mul2(gf_mul2(gf_mul2(x))) ^ gf_mul2(x) ^ x
+}
+
+fn gf_mul13(x: u8) -> u8 {
+    gf_mul2(gf_mul2(gf_mul2(x))) ^ gf_mul2(gf_mul2(x)) ^ x
+}
+
+fn gf_mul14(x: u8) -> u8 {
+    gf_mul2(gf_mul2(gf_mul2(x))) ^ gf_mul2(gf_mul2(x)) ^ gf_mul2(x)
 }
 
 pub fn mix_columns(state: [[u8; 4]; 4]) -> [[u8; 4]; 4]{
     let mut novo_state = [[0u8; 4]; 4];
 
-    // x⁷ + x⁶ + x⁵ + x⁴ + x³ + x² + x¹ + 1 = Polinômio
     for col in 0..4{
         let col_atual = [
             state[col][0],
@@ -226,7 +257,36 @@ pub fn mix_columns(state: [[u8; 4]; 4]) -> [[u8; 4]; 4]{
     novo_state
 }
 
-pub fn aes(plaintext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
+pub fn inv_mix_columns(state: [[u8; 4]; 4]) -> [[u8; 4]; 4]{
+    let mut novo_state = [[0u8; 4]; 4];
+
+    for col in 0..4{
+        let col_atual = [
+            state[col][0],
+            state[col][1],
+            state[col][2],
+            state[col][3]
+        ];
+
+        novo_state[col][0] = gf_mul14(col_atual[0]) ^ gf_mul11(col_atual[1]) ^ gf_mul13(col_atual[2]) ^ gf_mul9(col_atual[3]);
+        novo_state[col][1] = gf_mul9(col_atual[0]) ^ gf_mul14(col_atual[1]) ^ gf_mul11(col_atual[2]) ^ gf_mul13(col_atual[3]);
+        novo_state[col][2] = gf_mul13(col_atual[0]) ^ gf_mul9(col_atual[1]) ^ gf_mul14(col_atual[2]) ^ gf_mul11(col_atual[3]);
+        novo_state[col][3] = gf_mul11(col_atual[0]) ^ gf_mul13(col_atual[1]) ^ gf_mul9(col_atual[2]) ^ gf_mul14(col_atual[3]);
+    }
+
+    novo_state
+}
+
+fn pkcs7_pad(plaintext: &[u8]) -> Vec<u8>{
+    let block_size = 16;
+    let pad_len = block_size - (plaintext.len() % block_size);
+    let mut padded = plaintext.to_vec();
+    padded.extend(vec![pad_len as u8; pad_len]);
+    padded
+}
+
+pub fn aes_encrypt(plaintext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
+    let plaintext = pkcs7_pad(plaintext);
     let subchaves = key_expansion(dk, dklen);
     let mut ciphertext: Vec<u8> = Vec::new();
     let num_rounds = (dklen / 4) + 6;
@@ -254,4 +314,39 @@ pub fn aes(plaintext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
     }
 
     ciphertext
+}
+
+fn pkcs7_unpad(padded: &[u8]) -> Vec<u8>{
+    let pad_len = *padded.last().unwrap() as usize;
+    padded[..padded.len() - pad_len].to_vec()
+}
+
+pub fn aes_decrypt(ciphertext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
+    let subchaves = key_expansion(dk, dklen);
+    let mut plaintext: Vec<u8> = Vec::new();
+    let num_rounds = (dklen / 4) + 6;
+
+    for bloco in ciphertext.chunks(16){
+        let mut state = bytes_to_state(bloco.try_into().unwrap());
+        state = add_round_key(state, &subchaves[num_rounds as usize]);
+        state = inv_shift_rows(state);
+        state = inv_sub_bytes(state);
+
+        for round in (1..num_rounds).rev(){
+            state = add_round_key(state, &subchaves[round as usize]);
+            state = inv_mix_columns(state);
+            state = inv_shift_rows(state);
+            state = inv_sub_bytes(state);
+        }
+        
+        state = add_round_key(state, &subchaves[0]);
+
+        for lin in 0..4 {
+            for col in 0..4 {
+                plaintext.push(state[col][lin]);
+            }
+        }
+    }
+
+    pkcs7_unpad(&plaintext)
 }
