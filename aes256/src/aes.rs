@@ -1,3 +1,6 @@
+use rand::rngs::OsRng;
+use rand::RngCore;
+
 const SBOX: [u8; 256] = [
     0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
     0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
@@ -285,14 +288,33 @@ fn pkcs7_pad(plaintext: &[u8]) -> Vec<u8>{
     padded
 }
 
-pub fn aes_encrypt(plaintext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
+fn pkcs7_unpad(padded: &[u8]) -> Vec<u8>{
+    let pad_len = *padded.last().unwrap() as usize;
+    padded[..padded.len() - pad_len].to_vec()
+}
+
+pub fn aes_encrypt_cbc(plaintext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
     let plaintext = pkcs7_pad(plaintext);
     let subchaves = key_expansion(dk, dklen);
-    let mut ciphertext: Vec<u8> = Vec::new();
     let num_rounds = (dklen / 4) + 6;
 
-    for bloco in plaintext.chunks(16){
-        let mut state = bytes_to_state(bloco.try_into().unwrap());
+    let mut ciphertext: Vec<u8> = Vec::new();
+    let mut iv = [0u8; 16];
+    OsRng.fill_bytes(&mut iv);
+
+    // CBC: bloco ^ IV -> AES -> ciphertext
+    let mut bloco_anterior = iv;
+
+    for bloco in plaintext.chunks(16) {
+        let bloco_atual: [u8; 16] = bloco.try_into().unwrap();
+
+        let mut bloco_resultado = [0u8; 16];
+        for i in 0..16{
+            bloco_resultado[i] = bloco_atual[i] ^ bloco_anterior[i];
+        }
+
+        let mut state = bytes_to_state(bloco_resultado);
+
         state = add_round_key(state, &subchaves[0]);
 
         for round in 1..num_rounds{
@@ -306,28 +328,44 @@ pub fn aes_encrypt(plaintext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
         state = shift_rows(state);
         state = add_round_key(state, &subchaves[num_rounds as usize]);
 
+        let mut bloco_cifrado = [0u8; 16];
+        
+        let mut i = 0;
         for lin in 0..4 {
             for col in 0..4 {
-                ciphertext.push(state[col][lin]);
+                bloco_cifrado[i] = state[col][lin];
+                i += 1;
             }
         }
+        
+        ciphertext.extend_from_slice(&bloco_cifrado);
+
+        bloco_anterior = bloco_cifrado;
     }
 
-    ciphertext
+
+    let mut resultado_final = Vec::new();
+    resultado_final.extend_from_slice(&iv);
+    resultado_final.extend_from_slice(&ciphertext);
+
+    resultado_final
 }
 
-fn pkcs7_unpad(padded: &[u8]) -> Vec<u8>{
-    let pad_len = *padded.last().unwrap() as usize;
-    padded[..padded.len() - pad_len].to_vec()
-}
-
-pub fn aes_decrypt(ciphertext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
-    let subchaves = key_expansion(dk, dklen);
+pub fn aes_decrypt_cbc(iv_ciphertext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
     let mut plaintext: Vec<u8> = Vec::new();
+
+    let subchaves = key_expansion(dk, dklen);
     let num_rounds = (dklen / 4) + 6;
 
+    let iv: [u8; 16] = iv_ciphertext[..16].try_into().unwrap();
+    let ciphertext = &iv_ciphertext[16..];
+
+    let mut bloco_anterior = iv;
+    
     for bloco in ciphertext.chunks(16){
-        let mut state = bytes_to_state(bloco.try_into().unwrap());
+        let bloco_atual: [u8; 16] = bloco.try_into().unwrap();
+
+        let mut state = bytes_to_state(bloco_atual);
         state = add_round_key(state, &subchaves[num_rounds as usize]);
         state = inv_shift_rows(state);
         state = inv_sub_bytes(state);
@@ -341,11 +379,24 @@ pub fn aes_decrypt(ciphertext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
         
         state = add_round_key(state, &subchaves[0]);
 
+        let mut bloco_decifrado = [0u8; 16];
+        
+        let mut i = 0;
         for lin in 0..4 {
             for col in 0..4 {
-                plaintext.push(state[col][lin]);
+                bloco_decifrado[i] = state[col][lin];
+                i += 1;
             }
         }
+
+        let mut bloco_resultado = [0u8; 16];
+        for i in 0..16{
+            bloco_resultado[i] = bloco_decifrado[i] ^ bloco_anterior[i];
+        }
+
+        plaintext.extend_from_slice(&bloco_resultado);
+
+        bloco_anterior = bloco_atual;
     }
 
     pkcs7_unpad(&plaintext)

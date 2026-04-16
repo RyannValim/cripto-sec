@@ -3,7 +3,7 @@ mod pbkdf2;
 mod aes;
 
 use crate::pbkdf2::pbkdf2;
-use crate::aes::{aes_encrypt, aes_decrypt};
+use crate::aes::{aes_encrypt_cbc, aes_decrypt_cbc};
 
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -19,10 +19,10 @@ fn main(){
     let dk = pbkdf2(password, &salt, c, dklen);
 
     let plaintext = b"email@teste.com";
-    let ciphertext = aes_encrypt(plaintext, &dk, dklen);
-    let decrypted = aes_decrypt(&ciphertext, &dk, dklen);
+    let iv_ciphertext = aes_encrypt_cbc(plaintext, &dk, dklen);
+    let decrypted = aes_decrypt_cbc(&iv_ciphertext, &dk, dklen);
 
-    let hex: String = ciphertext.iter().map(|b| format!("{:02x}", b)).collect();
+    let hex: String = iv_ciphertext.iter().map(|b| format!("{:02x}", b)).collect();
 
     println!("Chave secreta:\n{}", std::str::from_utf8(password).unwrap());
     println!("\nChave derivada com PBKDF2:\n{:?}", dk);
