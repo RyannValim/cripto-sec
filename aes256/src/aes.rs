@@ -121,8 +121,8 @@ pub fn bytes_to_state(plaintext: [u8; 16]) -> [[u8; 4]; 4]{
     let mut state: [[u8; 4]; 4] = [[0u8; 4]; 4];
     let mut i_ptxt = 0;
 
-    for lin in 0..4{
-        for col in 0..4{
+    for col in 0..4{
+        for lin in 0..4{
             state[col][lin] = plaintext[i_ptxt];
             i_ptxt += 1;
         }
@@ -134,8 +134,8 @@ pub fn bytes_to_state(plaintext: [u8; 16]) -> [[u8; 4]; 4]{
 pub fn add_round_key(state: [[u8; 4]; 4], subkey: &[u8; 16]) -> [[u8; 4]; 4]{
     let mut state = state;
     let mut i_sb = 0;
-    for lin in 0..4{
-        for col in 0..4{
+    for col in 0..4{
+        for lin in 0..4{
             state[col][lin] = state[col][lin] ^ subkey[i_sb];
             i_sb += 1;
         }
@@ -147,8 +147,8 @@ pub fn add_round_key(state: [[u8; 4]; 4], subkey: &[u8; 16]) -> [[u8; 4]; 4]{
 pub fn sub_bytes(state: [[u8; 4]; 4]) -> [[u8; 4]; 4]{
     let mut state = state;
     
-    for lin in 0..4{
-        for col in 0..4{
+    for col in 0..4{
+        for lin in 0..4{
             state[col][lin] = SBOX[state[col][lin] as usize];
         }        
     }
@@ -159,8 +159,8 @@ pub fn sub_bytes(state: [[u8; 4]; 4]) -> [[u8; 4]; 4]{
 pub fn inv_sub_bytes(state: [[u8; 4]; 4]) -> [[u8; 4]; 4]{
     let mut state = state;
     
-    for lin in 0..4{
-        for col in 0..4{
+    for col in 0..4{
+        for lin in 0..4{
             state[col][lin] = INV_SBOX[state[col][lin] as usize];
         }
     }
@@ -331,8 +331,8 @@ pub fn aes_encrypt_cbc(plaintext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
         let mut bloco_cifrado = [0u8; 16];
         
         let mut i = 0;
-        for lin in 0..4 {
-            for col in 0..4 {
+        for col in 0..4 {
+            for lin in 0..4 {
                 bloco_cifrado[i] = state[col][lin];
                 i += 1;
             }
@@ -382,8 +382,8 @@ pub fn aes_decrypt_cbc(iv_ciphertext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
         let mut bloco_decifrado = [0u8; 16];
         
         let mut i = 0;
-        for lin in 0..4 {
-            for col in 0..4 {
+        for col in 0..4 {
+            for lin in 0..4 {
                 bloco_decifrado[i] = state[col][lin];
                 i += 1;
             }
@@ -400,4 +400,48 @@ pub fn aes_decrypt_cbc(iv_ciphertext: &[u8], dk: &[u8], dklen: u32) -> Vec<u8>{
     }
 
     pkcs7_unpad(&plaintext)
+}
+
+pub fn aes_encrypt_cbc_teste_nist(plaintext: &[u8], dk: &[u8], dklen: u32, iv: [u8; 16]) -> Vec<u8> {
+    let subchaves = key_expansion(dk, dklen);
+    let num_rounds = (dklen / 4) + 6;
+    let mut ciphertext: Vec<u8> = Vec::new();
+    let mut bloco_anterior = iv;
+
+    for bloco in plaintext.chunks(16) {
+        let bloco_atual: [u8; 16] = bloco.try_into().unwrap();
+
+        let mut bloco_resultado = [0u8; 16];
+        for i in 0..16 {
+            bloco_resultado[i] = bloco_atual[i] ^ bloco_anterior[i];
+        }
+
+        let mut state = bytes_to_state(bloco_resultado);
+        state = add_round_key(state, &subchaves[0]);
+
+        for round in 1..num_rounds {
+            state = sub_bytes(state);
+            state = shift_rows(state);
+            state = mix_columns(state);
+            state = add_round_key(state, &subchaves[round as usize]);
+        }
+
+        state = sub_bytes(state);
+        state = shift_rows(state);
+        state = add_round_key(state, &subchaves[num_rounds as usize]);
+
+        let mut bloco_cifrado = [0u8; 16];
+        let mut i = 0;
+        for col in 0..4 {
+            for lin in 0..4 {
+                bloco_cifrado[i] = state[col][lin];
+                i += 1;
+            }
+        }
+
+        ciphertext.extend_from_slice(&bloco_cifrado);
+        bloco_anterior = bloco_cifrado;
+    }
+
+    ciphertext
 }
