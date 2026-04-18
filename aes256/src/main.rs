@@ -36,27 +36,86 @@ fn testar_nist() {
     }
 }
 
-fn main(){
-    let password = b"Curitib@231";
-    let c: u32 = 100_000;
-    let dklen: u32 = 32;
+fn cifrar(caminho: &str) {
+    // 1. ler o arquivo
+    let plaintext = std::fs::read(caminho).expect("Erro ao ler o arquivo.");
 
+    // 2. pedir senha
+    let password_string = rpassword::prompt_password("Digite a senha para cifrar: ").expect("Erro ao ler a senha");
+    let password = password_string.as_bytes();
+
+    // 3. gerar salt
     let mut salt = [0u8; 16];
     OsRng.fill_bytes(&mut salt);
 
+    // 4. derivar chave com pbkdf2
+    let c: u32 = 100_000;
+    let dklen: u32 = 32;
     let dk = pbkdf2(password, &salt, c, dklen);
 
-    let plaintext = b"email@teste.com";
-    let iv_ciphertext = aes_encrypt_cbc(plaintext, &dk, dklen);
-    let decrypted = aes_decrypt_cbc(&iv_ciphertext, &dk, dklen);
+    // 5. cifrar com aes_encrypt_cbc
+    let iv_ciphertext = aes_encrypt_cbc(&plaintext, &dk, dklen);
+    
+    // 6. salvar [salt(16)] + [IV(16)] + [ciphertext] em arquivo.cifrado
+    let caminho_cifrado = format!("{}.cifrado", caminho);
 
-    let hex: String = iv_ciphertext.iter().map(|b| format!("{:02x}", b)).collect();
+    let mut conteudo_final = Vec::new();
+    conteudo_final.extend_from_slice(&salt);
+    conteudo_final.extend_from_slice(&iv_ciphertext);
 
-    println!("Chave secreta:\n{}", std::str::from_utf8(password).unwrap());
-    println!("\nChave derivada com PBKDF2:\n{:?}", dk);
-    println!("\nTexto de entrada:\n{}", std::str::from_utf8(plaintext).unwrap());
-    println!("\nTexto encriptografado (hex):\n{}", hex);
-    println!("\nTexto desencriptografado:\n{}", String::from_utf8(decrypted).unwrap());
+    std::fs::write(&caminho_cifrado, &conteudo_final).expect("Erro ao salvar o arquivo.");
+    println!("Arquivo cifrado salvo em: {}", caminho_cifrado);
+}
 
-    testar_nist();
+fn decifrar(caminho: &str) {
+    // 1. ler o arquivo
+    let conteudo = std::fs::read(caminho).expect("Erro ao ler o arquivo.");
+    
+    // 2. pedir senha
+    let password_string = rpassword::prompt_password("Digite a senha para decifrar: ").expect("Erro ao ler a senha");
+    let password = password_string.as_bytes();
+
+    // 3. extrair salt dos primeiros 16 bytes
+    let salt = &conteudo[0..16];
+
+    // 4. o resto é IV + ciphertext - passa direto pro aes_decrypt_cbc
+    let iv_ciphertext = &conteudo[16..];
+    
+    // 5. decifrar chave com pbkdf2
+    let c: u32 = 100_000;
+    let dklen: u32 = 32;
+    let dk = pbkdf2(password, salt, c, dklen);
+    
+    // 6. exibir conteúdo
+    let decrypted = aes_decrypt_cbc(iv_ciphertext, &dk, dklen);
+
+    //7. exibir conteúdo
+    let texto_limpo = String::from_utf8(decrypted).expect("Erro ao converter para texto.");
+    println!("{}", texto_limpo.trim_end());
+}
+
+fn main(){
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.len() < 2{
+        println!("Uso: cargo run -- <comando> [arquivo]");
+        return;
+    }
+
+    match args[1].as_str(){
+        "testar" => testar_nist(),
+        "cifrar" => {
+            if args.len() < 3{
+                return println!("Erro: Faltou o nome do arquivo.");
+            }
+            cifrar(&args[2])
+        },
+        "decifrar" => {
+            if args.len() < 3 {
+                return println!("Erro: Faltou o nome do arquivo.");
+            }
+            decifrar(&args[2])
+        },
+        _ => println!("Comando inválido. Use: cifrar, decifrar ou testar."),
+    }
 }

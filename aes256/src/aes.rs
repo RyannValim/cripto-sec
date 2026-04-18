@@ -289,7 +289,17 @@ fn pkcs7_pad(plaintext: &[u8]) -> Vec<u8>{
 }
 
 fn pkcs7_unpad(padded: &[u8]) -> Vec<u8>{
+    if padded.is_empty(){
+        return Vec::new();
+    }
+
     let pad_len = *padded.last().unwrap() as usize;
+
+    if pad_len == 0 || pad_len > 16 || pad_len > padded.len(){
+        eprintln!("\nErro: Senha incorreta ou arquivo corrompido.");
+        std::process::exit(1);
+    }
+
     padded[..padded.len() - pad_len].to_vec()
 }
 
