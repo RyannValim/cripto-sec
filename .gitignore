@@ -1,0 +1,21 @@
+# Rust / Cargo
+**/target/
+
+# Arquivos de debug
+**/*.rs.bk
+**/*.pdb
+**/*.d
+
+# Binários compilados
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Arquivos cifrados e de teste
+*.cifrado
+
+# Arquivos de cache do compilador
+**/.rustc_info.json
+**/CACHEDIR.TAG
+**/flycheck0/

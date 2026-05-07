@@ -16,7 +16,7 @@ pub fn pbkdf2(password: &[u8], salt: &[u8], c: u32, dklen: u32) -> Vec<u8>{
             dk[j] = dk[j] ^ u_atual[j];
         }
     }
-
+  
     dk.truncate(dklen as usize);
     dk
 }

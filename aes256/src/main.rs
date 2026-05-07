@@ -12,7 +12,7 @@ fn testar_nist() {
     let key: Vec<u8> = hex::decode(
         "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4"
     ).unwrap();
-
+ 
     let iv: [u8; 16] = hex::decode(
         "000102030405060708090a0b0c0d0e0f"
     ).unwrap().try_into().unwrap();
